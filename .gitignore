@@ -1,0 +1,17 @@
+# Python
+venv/
+__pycache__/
+*.pyc
+.env
+
+# Node
+node_modules/
+frontend/dist/
+
+# Evidence/uploads
+evidence/
+*.pt
+
+# OS/Editor
+.DS_Store
+.vscode/
