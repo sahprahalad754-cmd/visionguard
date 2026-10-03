@@ -1,3 +1,4 @@
+import os
 import cv2
 import numpy as np
 from ultralytics import YOLO
@@ -9,21 +10,25 @@ manager = IncidentManager(cooldown_seconds=10)
 
 model = YOLO("yolov8n.pt")
 
-# Define restricted zone as a polygon (x, y points)
+# Evidence photos yahan save hongi (backend/evidence)
+EVIDENCE_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "evidence")
+os.makedirs(EVIDENCE_DIR, exist_ok=True)
+
 RESTRICTED_ZONE = np.array([
     [100, 100],
     [600, 100],
-    [600, 470],
-    [100, 470]
+    [600, 480],
+    [100, 480]
 ], np.int32)
+
 
 def point_in_polygon(point, polygon):
     result = cv2.pointPolygonTest(polygon, point, False)
     return result >= 0
 
+
 cap = cv2.VideoCapture(0)
 
-# Track which IDs are currently inside the zone (avoid duplicate alerts)
 ids_in_zone = set()
 
 while True:
@@ -31,11 +36,10 @@ while True:
     if not ret:
         break
 
-    results = model.track(frame, persist=True, verbose=False, classes=[0])  # class 0 = person
+    results = model.track(frame, persist=True, verbose=False, classes=[0])
 
     annotated_frame = frame.copy()
 
-    # Draw restricted zone
     cv2.polylines(annotated_frame, [RESTRICTED_ZONE], isClosed=True, color=(0, 0, 255), thickness=2)
     overlay = annotated_frame.copy()
     cv2.fillPoly(overlay, [RESTRICTED_ZONE], color=(0, 0, 255))
@@ -63,10 +67,15 @@ while True:
             if inside and track_id not in ids_in_zone:
                 print(f"[ALERT] Person ID {track_id} entered restricted zone!")
                 ids_in_zone.add(track_id)
+
                 incident = manager.create_incident(
                     "cam_01", "restricted_zone", Severity.HIGH, float(conf), track_id
                 )
                 if incident:
+                    # Photo save karo (incident id ke naam se)
+                    filename = f"{incident.id}.jpg"
+                    cv2.imwrite(os.path.join(EVIDENCE_DIR, filename), annotated_frame)
+                    incident.evidence_path = filename
                     save_incident(incident)
             elif not inside and track_id in ids_in_zone:
                 ids_in_zone.discard(track_id)

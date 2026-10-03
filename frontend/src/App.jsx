@@ -1,7 +1,8 @@
 import { useEffect, useState, useCallback } from "react";
 import "./App.css";
 
-const API = "http://127.0.0.1:8000/api";
+const HOST = "http://127.0.0.1:8000";
+const API = `${HOST}/api`;
 const NEXT_STATUS = { OPEN: "ACKNOWLEDGED", ACKNOWLEDGED: "RESOLVED" };
 
 export default function App() {
@@ -9,6 +10,7 @@ export default function App() {
   const [type, setType] = useState("");
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
+  const [preview, setPreview] = useState(null);
 
   const load = useCallback(async () => {
     try {
@@ -69,13 +71,23 @@ export default function App() {
       <table>
         <thead>
           <tr>
-            <th>Time</th><th>Camera</th><th>Type</th><th>Severity</th>
-            <th>Confidence</th><th>Status</th><th>Action</th>
+            <th>Photo</th><th>Time</th><th>Camera</th><th>Type</th>
+            <th>Severity</th><th>Confidence</th><th>Status</th><th>Action</th>
           </tr>
         </thead>
         <tbody>
           {incidents.map((i) => (
             <tr key={i.id}>
+              <td>
+                {i.evidence_path ? (
+                  <img
+                    className="thumb"
+                    src={`${HOST}/evidence/${i.evidence_path}`}
+                    alt="evidence"
+                    onClick={() => setPreview(`${HOST}/evidence/${i.evidence_path}`)}
+                  />
+                ) : "-"}
+              </td>
               <td>{new Date(i.timestamp * 1000).toLocaleString()}</td>
               <td>{i.camera_id}</td>
               <td>{i.incident_type}</td>
@@ -92,10 +104,16 @@ export default function App() {
             </tr>
           ))}
           {incidents.length === 0 && (
-            <tr><td colSpan="7">Koi incident nahi mila</td></tr>
+            <tr><td colSpan="8">Koi incident nahi mila</td></tr>
           )}
         </tbody>
       </table>
+
+      {preview && (
+        <div className="overlay" onClick={() => setPreview(null)}>
+          <img src={preview} alt="preview" />
+        </div>
+      )}
     </div>
   );
 }

@@ -1,8 +1,10 @@
 import logging
+import os
 from typing import Optional
 
 from fastapi import FastAPI, Depends, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -22,6 +24,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Evidence photos serve karne ke liye: http://127.0.0.1:8000/evidence/<file>.jpg
+EVIDENCE_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "evidence")
+os.makedirs(EVIDENCE_DIR, exist_ok=True)
+app.mount("/evidence", StaticFiles(directory=EVIDENCE_DIR), name="evidence")
 
 VALID_STATUS = {"OPEN", "ACKNOWLEDGED", "RESOLVED"}
 
