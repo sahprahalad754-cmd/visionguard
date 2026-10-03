@@ -1,9 +1,30 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import "./App.css";
 
 const HOST = "http://127.0.0.1:8000";
 const API = `${HOST}/api`;
 const NEXT_STATUS = { OPEN: "ACKNOWLEDGED", ACKNOWLEDGED: "RESOLVED" };
+
+// Chhota beep sound (bina file ke)
+function beep() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = "square";
+    osc.frequency.value = 880;
+    gain.gain.value = 0.1;
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start();
+    setTimeout(() => {
+      osc.stop();
+      ctx.close();
+    }, 400);
+  } catch (e) {
+    // sound block ho toh ignore
+  }
+}
 
 export default function App() {
   const [incidents, setIncidents] = useState([]);
@@ -11,6 +32,8 @@ export default function App() {
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
   const [preview, setPreview] = useState(null);
+  const [alertMsg, setAlertMsg] = useState(null);
+  const seenIds = useRef(null); // pehle se dekhe hue incident ids
 
   const load = useCallback(async () => {
     try {
@@ -19,8 +42,27 @@ export default function App() {
       if (status) params.append("status", status);
       const res = await fetch(`${API}/incidents?${params}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      setIncidents(await res.json());
+      const data = await res.json();
+      setIncidents(data);
       setError("");
+
+      // Naye HIGH/CRITICAL incident par alert
+      const ids = new Set(data.map((i) => i.id));
+      if (seenIds.current === null) {
+        seenIds.current = ids; // pehli baar: sirf yaad rakho, alert mat do
+      } else {
+        const fresh = data.filter(
+          (i) =>
+            !seenIds.current.has(i.id) &&
+            (i.severity === "HIGH" || i.severity === "CRITICAL")
+        );
+        if (fresh.length > 0) {
+          const f = fresh[0];
+          setAlertMsg(`🚨 ${f.severity}: ${f.incident_type} (${f.camera_id})`);
+          beep();
+        }
+        data.forEach((i) => seenIds.current.add(i.id));
+      }
     } catch (e) {
       setError("API se connect nahi ho paa raha: " + e.message);
     }
@@ -28,7 +70,7 @@ export default function App() {
 
   useEffect(() => {
     load();
-    const t = setInterval(load, 5000);
+    const t = setInterval(load, 3000);
     return () => clearInterval(t);
   }, [load]);
 
@@ -45,6 +87,12 @@ export default function App() {
 
   return (
     <div className="app">
+      {alertMsg && (
+        <div className="alert-banner" onClick={() => setAlertMsg(null)}>
+          {alertMsg} <span className="alert-close">✕</span>
+        </div>
+      )}
+
       <h1>🛡️ VisionGuard Dashboard</h1>
 
       <div className="stats">

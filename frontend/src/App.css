@@ -20,3 +20,23 @@ th { color: #9ca3af; font-weight: 600; }
 .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.85);
   display: flex; align-items: center; justify-content: center; cursor: pointer; }
 .overlay img { max-width: 90%; max-height: 90%; border-radius: 8px; }
+
+.alert-banner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  background: #dc2626;
+  color: #fff;
+  padding: 14px 20px;
+  font-weight: 700;
+  text-align: center;
+  cursor: pointer;
+  animation: flash 1s ease-in-out infinite alternate;
+}
+.alert-close { margin-left: 12px; opacity: 0.8; }
+@keyframes flash {
+  from { background: #dc2626; }
+  to { background: #991b1b; }
+}
