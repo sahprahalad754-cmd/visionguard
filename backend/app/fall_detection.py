@@ -1,6 +1,8 @@
-import cv2
+import os
 import time
 from collections import defaultdict
+
+import cv2
 from ultralytics import YOLO
 
 from .incident import IncidentManager, Severity
@@ -9,6 +11,10 @@ from .crud import save_incident
 manager = IncidentManager(cooldown_seconds=10)
 
 model = YOLO("yolov8n.pt")
+
+# Evidence photos yahan save hongi (backend/evidence)
+EVIDENCE_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "evidence")
+os.makedirs(EVIDENCE_DIR, exist_ok=True)
 
 cap = cv2.VideoCapture(0)
 
@@ -25,7 +31,7 @@ while True:
     if not ret:
         break
 
-    results = model.track(frame, persist=True, verbose=False, classes=[0])  # class 0 = person
+    results = model.track(frame, persist=True, verbose=False, classes=[0])
     annotated_frame = results[0].plot()
 
     if results[0].boxes.id is not None:
@@ -50,20 +56,25 @@ while True:
             enough_data = len(history) > 5 and (now - history[0][0]) >= 1.5
             is_fallen = enough_data and all(r < FALL_RATIO_THRESHOLD for (_, r) in history)
 
-            if is_fallen and (now - last_alert_time[track_id]) > FALL_ALERT_COOLDOWN:
-                print(f"[FALL ALERT] Person ID {track_id} may have fallen! (ratio={ratio:.2f})")
-                last_alert_time[track_id] = now
-                incident = manager.create_incident(
-                    "cam_01", "fall_detected", Severity.CRITICAL, float(conf), track_id
-                )
-                if incident:
-                    save_incident(incident)
-
             if is_fallen:
                 label = f"ID:{track_id} FALL DETECTED"
                 x1, y1 = int(x - w / 2), int(y - h / 2)
                 cv2.putText(annotated_frame, label, (x1, y1 - 10),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+
+            if is_fallen and (now - last_alert_time[track_id]) > FALL_ALERT_COOLDOWN:
+                print(f"[FALL ALERT] Person ID {track_id} may have fallen! (ratio={ratio:.2f})")
+                last_alert_time[track_id] = now
+
+                incident = manager.create_incident(
+                    "cam_01", "fall_detected", Severity.CRITICAL, float(conf), track_id
+                )
+                if incident:
+                    # Photo save karo (incident id ke naam se)
+                    filename = f"{incident.id}.jpg"
+                    cv2.imwrite(os.path.join(EVIDENCE_DIR, filename), annotated_frame)
+                    incident.evidence_path = filename
+                    save_incident(incident)
 
     cv2.imshow("VisionGuard - Fall Detection (experimental) - Press Q to quit", annotated_frame)
 
