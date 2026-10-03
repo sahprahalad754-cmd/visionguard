@@ -2,15 +2,19 @@ import cv2
 import numpy as np
 from ultralytics import YOLO
 
+from .incident import IncidentManager, Severity
+from .crud import save_incident
+
+manager = IncidentManager(cooldown_seconds=10)
+
 model = YOLO("yolov8n.pt")
 
 # Define restricted zone as a polygon (x, y points)
-# These are example coordinates - adjust based on your camera resolution
 RESTRICTED_ZONE = np.array([
-    [200, 200],
-    [500, 200],
-    [500, 450],
-    [200, 450]
+    [100, 100],
+    [600, 100],
+    [600, 470],
+    [100, 470]
 ], np.int32)
 
 def point_in_polygon(point, polygon):
@@ -40,8 +44,9 @@ while True:
     if results[0].boxes.id is not None:
         boxes = results[0].boxes.xywh.cpu()
         track_ids = results[0].boxes.id.int().cpu().tolist()
+        confs = results[0].boxes.conf.cpu().tolist()
 
-        for box, track_id in zip(boxes, track_ids):
+        for box, track_id, conf in zip(boxes, track_ids, confs):
             x, y, w, h = box
             foot_point = (float(x), float(y + h / 2))
 
@@ -58,6 +63,11 @@ while True:
             if inside and track_id not in ids_in_zone:
                 print(f"[ALERT] Person ID {track_id} entered restricted zone!")
                 ids_in_zone.add(track_id)
+                incident = manager.create_incident(
+                    "cam_01", "restricted_zone", Severity.HIGH, float(conf), track_id
+                )
+                if incident:
+                    save_incident(incident)
             elif not inside and track_id in ids_in_zone:
                 ids_in_zone.discard(track_id)
 

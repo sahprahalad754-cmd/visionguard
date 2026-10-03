@@ -1,122 +1,101 @@
-import { useState } from 'react'
-import heroImg from './assets/hero.png'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import './App.css'
+import { useEffect, useState, useCallback } from "react";
+import "./App.css";
 
-function App() {
-  const [count, setCount] = useState(0)
+const API = "http://127.0.0.1:8000/api";
+const NEXT_STATUS = { OPEN: "ACKNOWLEDGED", ACKNOWLEDGED: "RESOLVED" };
+
+export default function App() {
+  const [incidents, setIncidents] = useState([]);
+  const [type, setType] = useState("");
+  const [status, setStatus] = useState("");
+  const [error, setError] = useState("");
+
+  const load = useCallback(async () => {
+    try {
+      const params = new URLSearchParams();
+      if (type) params.append("incident_type", type);
+      if (status) params.append("status", status);
+      const res = await fetch(`${API}/incidents?${params}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      setIncidents(await res.json());
+      setError("");
+    } catch (e) {
+      setError("API se connect nahi ho paa raha: " + e.message);
+    }
+  }, [type, status]);
+
+  useEffect(() => {
+    load();
+    const t = setInterval(load, 5000);
+    return () => clearInterval(t);
+  }, [load]);
+
+  const updateStatus = async (id, newStatus) => {
+    await fetch(`${API}/incidents/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: newStatus }),
+    });
+    load();
+  };
+
+  const open = incidents.filter((i) => i.status === "OPEN").length;
 
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.jsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
+    <div className="app">
+      <h1>🛡️ VisionGuard Dashboard</h1>
 
-      <div className="ticks"></div>
+      <div className="stats">
+        <div className="card">Total: <b>{incidents.length}</b></div>
+        <div className="card">Open: <b>{open}</b></div>
+      </div>
 
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
+      <div className="filters">
+        <select value={type} onChange={(e) => setType(e.target.value)}>
+          <option value="">All types</option>
+          <option value="restricted_zone">Restricted zone</option>
+          <option value="fall_detected">Fall detected</option>
+        </select>
+        <select value={status} onChange={(e) => setStatus(e.target.value)}>
+          <option value="">All status</option>
+          <option value="OPEN">OPEN</option>
+          <option value="ACKNOWLEDGED">ACKNOWLEDGED</option>
+          <option value="RESOLVED">RESOLVED</option>
+        </select>
+      </div>
 
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
-  )
+      {error && <p className="error">{error}</p>}
+
+      <table>
+        <thead>
+          <tr>
+            <th>Time</th><th>Camera</th><th>Type</th><th>Severity</th>
+            <th>Confidence</th><th>Status</th><th>Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          {incidents.map((i) => (
+            <tr key={i.id}>
+              <td>{new Date(i.timestamp * 1000).toLocaleString()}</td>
+              <td>{i.camera_id}</td>
+              <td>{i.incident_type}</td>
+              <td><span className={`badge ${i.severity}`}>{i.severity}</span></td>
+              <td>{(i.confidence * 100).toFixed(0)}%</td>
+              <td>{i.status}</td>
+              <td>
+                {NEXT_STATUS[i.status] ? (
+                  <button onClick={() => updateStatus(i.id, NEXT_STATUS[i.status])}>
+                    Mark {NEXT_STATUS[i.status]}
+                  </button>
+                ) : "✔"}
+              </td>
+            </tr>
+          ))}
+          {incidents.length === 0 && (
+            <tr><td colSpan="7">Koi incident nahi mila</td></tr>
+          )}
+        </tbody>
+      </table>
+    </div>
+  );
 }
-
-export default App
