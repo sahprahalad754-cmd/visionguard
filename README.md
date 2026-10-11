@@ -2,6 +2,8 @@
 
 AI-based video surveillance system that detects security incidents from a camera feed, stores them in PostgreSQL with photo evidence, and shows them live on a web dashboard.
 
+![Dashboard](docs/dashboard.jpeg)
+
 ## Features
 
 - **Restricted zone detection**: alerts when a person enters a marked zone (YOLOv8 + tracking)
@@ -35,6 +37,7 @@ visionguard/
 │   │   └── fall_detection.py   # Fall detection script
 │   ├── evidence/               # Saved photos (git-ignored)
 │   └── requirements.txt
+├── docs/                       # Screenshots
 └── frontend/                   # React dashboard
 ```
 
