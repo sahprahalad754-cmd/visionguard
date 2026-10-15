@@ -1,7 +1,8 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import "./App.css";
 
-const HOST = "http://127.0.0.1:8000";
+const HOST = import.meta.env.VITE_API_HOST || "http://127.0.0.1:8000";
+const API_KEY = import.meta.env.VITE_API_KEY || "";
 const API = `${HOST}/api`;
 const NEXT_STATUS = { OPEN: "ACKNOWLEDGED", ACKNOWLEDGED: "RESOLVED" };
 
@@ -33,7 +34,7 @@ export default function App() {
   const [error, setError] = useState("");
   const [preview, setPreview] = useState(null);
   const [alertMsg, setAlertMsg] = useState(null);
-  const seenIds = useRef(null); // pehle se dekhe hue incident ids
+  const seenIds = useRef(null);
 
   const load = useCallback(async () => {
     try {
@@ -46,10 +47,9 @@ export default function App() {
       setIncidents(data);
       setError("");
 
-      // Naye HIGH/CRITICAL incident par alert
       const ids = new Set(data.map((i) => i.id));
       if (seenIds.current === null) {
-        seenIds.current = ids; // pehli baar: sirf yaad rakho, alert mat do
+        seenIds.current = ids;
       } else {
         const fresh = data.filter(
           (i) =>
@@ -75,11 +75,17 @@ export default function App() {
   }, [load]);
 
   const updateStatus = async (id, newStatus) => {
-    await fetch(`${API}/incidents/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: newStatus }),
-    });
+    try {
+      const res = await fetch(`${API}/incidents/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", "X-API-Key": API_KEY },
+        body: JSON.stringify({ status: newStatus }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      setError("");
+    } catch (e) {
+      setError("Status update fail: " + e.message);
+    }
     load();
   };
 

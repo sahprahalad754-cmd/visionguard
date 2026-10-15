@@ -1,4 +1,5 @@
 import os
+import time
 import cv2
 import numpy as np
 from ultralytics import YOLO
@@ -30,6 +31,8 @@ def point_in_polygon(point, polygon):
 cap = cv2.VideoCapture(0)
 
 ids_in_zone = set()
+last_alert_time = 0
+ALERT_COOLDOWN = 10  # seconds
 
 while True:
     ret, frame = cap.read()
@@ -65,18 +68,21 @@ while True:
             cv2.putText(annotated_frame, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
 
             if inside and track_id not in ids_in_zone:
-                print(f"[ALERT] Person ID {track_id} entered restricted zone!")
                 ids_in_zone.add(track_id)
 
-                incident = manager.create_incident(
-                    "cam_01", "restricted_zone", Severity.HIGH, float(conf), track_id
-                )
-                if incident:
-                    # Photo save karo (incident id ke naam se)
-                    filename = f"{incident.id}.jpg"
-                    cv2.imwrite(os.path.join(EVIDENCE_DIR, filename), annotated_frame)
-                    incident.evidence_path = filename
-                    save_incident(incident)
+                if time.time() - last_alert_time >= ALERT_COOLDOWN:
+                    last_alert_time = time.time()
+                    print(f"[ALERT] Person ID {track_id} entered restricted zone!")
+
+                    incident = manager.create_incident(
+                        "cam_01", "restricted_zone", Severity.HIGH, float(conf), track_id
+                    )
+                    if incident:
+                        # Photo save karo (incident id ke naam se)
+                        filename = f"{incident.id}.jpg"
+                        cv2.imwrite(os.path.join(EVIDENCE_DIR, filename), annotated_frame)
+                        incident.evidence_path = filename
+                        save_incident(incident)
             elif not inside and track_id in ids_in_zone:
                 ids_in_zone.discard(track_id)
 

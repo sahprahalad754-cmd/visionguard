@@ -21,10 +21,14 @@ cap = cv2.VideoCapture(0)
 # Track aspect ratio history per person: {track_id: [(timestamp, ratio), ...]}
 ratio_history = defaultdict(list)
 
-# Agar height/width ratio is se kam ho, toh person lete hue ho sakta hai
-FALL_RATIO_THRESHOLD = 0.8
-FALL_ALERT_COOLDOWN = 5  # seconds
-last_alert_time = defaultdict(float)
+FALL_RATIO_THRESHOLD = 0.7   # height/width is se kam = leta hua
+STANDING_RATIO = 1.2         # height/width is se zyada = khada hua
+STANDING_MEMORY = 6          # girne se pehle itne sec ke andar khada dikha hona chahiye
+GLOBAL_COOLDOWN = 15         # seconds, kisi bhi ID ke liye
+
+last_standing_time = defaultdict(float)
+fall_active = set()          # jin IDs ka fall alert ho chuka hai
+last_global_alert = 0
 
 while True:
     ret, frame = cap.read()
@@ -44,6 +48,15 @@ while True:
             ratio = float(h) / float(w) if w > 0 else 0  # height/width
 
             now = time.time()
+
+            # Khada hua dikha toh time yaad rakho
+            if ratio >= STANDING_RATIO:
+                last_standing_time[track_id] = now
+
+            # Utha toh dobara alert allow
+            if ratio >= FALL_RATIO_THRESHOLD:
+                fall_active.discard(track_id)
+
             ratio_history[track_id].append((now, ratio))
 
             # Sirf last 2 seconds ka data rakho
@@ -51,10 +64,11 @@ while True:
                 (t, r) for (t, r) in ratio_history[track_id] if now - t <= 2
             ]
 
-            # Fall tab maano jab ~2 sec ke saare readings ratio < threshold ho
             history = ratio_history[track_id]
             enough_data = len(history) > 5 and (now - history[0][0]) >= 1.5
-            is_fallen = enough_data and all(r < FALL_RATIO_THRESHOLD for (_, r) in history)
+            all_low = enough_data and all(r < FALL_RATIO_THRESHOLD for (_, r) in history)
+            was_standing = (now - last_standing_time[track_id]) <= STANDING_MEMORY
+            is_fallen = all_low and was_standing
 
             if is_fallen:
                 label = f"ID:{track_id} FALL DETECTED"
@@ -62,9 +76,14 @@ while True:
                 cv2.putText(annotated_frame, label, (x1, y1 - 10),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
 
-            if is_fallen and (now - last_alert_time[track_id]) > FALL_ALERT_COOLDOWN:
+            if (
+                is_fallen
+                and track_id not in fall_active
+                and (now - last_global_alert) > GLOBAL_COOLDOWN
+            ):
                 print(f"[FALL ALERT] Person ID {track_id} may have fallen! (ratio={ratio:.2f})")
-                last_alert_time[track_id] = now
+                fall_active.add(track_id)
+                last_global_alert = now
 
                 incident = manager.create_incident(
                     "cam_01", "fall_detected", Severity.CRITICAL, float(conf), track_id
